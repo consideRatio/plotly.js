@@ -357,8 +357,6 @@ function selectOnClick(evt, gd, xAxes, yAxes, subplot, dragOptions, polygonOutli
                 dragOptions.selectionDefs.push(currentSelectionDef);
             }
 
-            if(polygonOutlines) drawSelection(dragOptions.mergedPolygons, polygonOutlines);
-
             if(sendEvents) {
                 gd.emit('plotly_selected', eventData);
             }

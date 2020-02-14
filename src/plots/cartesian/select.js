@@ -209,8 +209,8 @@ function prepSelect(e, startX, startY, dragOptions, mode) {
             selectionTester = polygonTester(currentPolygon);
         }
 
-        // draw selection
-        drawSelection(mergedPolygons, outlines);
+        // display polygons on the screen
+        displayOutlines(mergedPolygons, outlines);
 
 
         throttle.throttle(
@@ -310,7 +310,8 @@ function prepSelect(e, startX, startY, dragOptions, mode) {
 
 function selectOnClick(evt, gd, xAxes, yAxes, subplot, dragOptions, polygonOutlines) {
     var hoverData = gd._hoverdata;
-    var clickmode = gd._fullLayout.clickmode;
+    var fullLayout = gd._fullLayout;
+    var clickmode = fullLayout.clickmode;
     var sendEvents = clickmode.indexOf('event') > -1;
     var selection = [];
     var searchTraces, searchInfo, currentSelectionDef, selectionTester, traceSelection;
@@ -371,7 +372,12 @@ function selectOnClick(evt, gd, xAxes, yAxes, subplot, dragOptions, polygonOutli
                 dragOptions.selectionDefs.push(currentSelectionDef);
             }
 
-            if(polygonOutlines) drawSelection(dragOptions.mergedPolygons, polygonOutlines);
+            if(polygonOutlines) {
+                var polygons = dragOptions.mergedPolygons;
+
+                // display polygons on the screen
+                displayOutlines(polygons, polygonOutlines);
+            }
 
             if(sendEvents) {
                 gd.emit('plotly_selected', eventData);
@@ -563,19 +569,92 @@ function determineSearchTraces(gd, xAxes, yAxes, subplot) {
     }
 }
 
-function drawSelection(polygons, outlines) {
+function displayOutlines(
+    polygons, // in
+    outlines  // inout
+) {
     var paths = [];
-    var i, d;
-
-    for(i = 0; i < polygons.length; i++) {
-        var ppts = polygons[i];
-        paths.push(ppts.join('L') + 'L' + ppts[0]);
+    for(var i = 0; i < polygons.length; i++) {
+        paths.push(
+            providePath(polygons[i])
+        );
     }
 
-    d = polygons.length > 0 ?
-      'M' + paths.join('M') + 'Z' :
-      'M0,0Z';
-    outlines.attr('d', d);
+    outlines.attr('d', writePaths(paths));
+}
+
+function providePath(polygon) {
+    return polygon.join('L') + 'L' + polygon[0];
+}
+
+function writePaths(paths) {
+    return paths.length > 0 ? 'M' + paths.join('M') + 'Z' : 'M0,0Z';
+}
+
+function readPaths(str, size) {
+    var allParts = str
+        .substring(1, str.length - 1) // remove M from start and Z from end
+        .split('M');
+
+    var allPaths = [];
+    for(var i = 0; i < allParts.length; i++) {
+        var part = allParts[i].split('L');
+
+        var path = [];
+        for(var j = 0; j < part.length - 1; j++) { // skip last closing point
+            var pos = part[j].split(',');
+            var x = pos[0] / size.w;
+            var y = pos[1] / size.h;
+
+            path.push([x, 1 - y]);
+        }
+
+        allPaths.push(path);
+    }
+
+    return allPaths;
+}
+
+function addShape(gd, outlines) {
+    if(!outlines.length) return;
+    var d = outlines[outlines.length - 1] // pick last one | TODO: why we get two identical elements?
+        .getAttribute('d');
+
+    var newShapes = [];
+    var fullLayout = gd._fullLayout;
+    var polygons = readPaths(d, fullLayout._size);
+    for(var i = 0; i < polygons.length; i++) {
+        var shape = {
+            xref: 'paper',
+            yref: 'paper',
+            opacity: 0.5,
+            fillcolor: 'yellow',
+            line: {
+                color: 'black',
+                width: 2,
+                dash: 'dash'
+            }
+        };
+
+        if(polygons[i].length === 4) { // TODO: should improve this check to detect rectangles
+            shape.x0 = polygons[i][0][0];
+            shape.x1 = polygons[i][2][0];
+            shape.y0 = polygons[i][0][1];
+            shape.y1 = polygons[i][2][1];
+        } else {
+            shape.path = writePaths([
+                providePath(polygons[i])
+            ]);
+        }
+
+        newShapes.push(shape);
+    }
+
+    if(newShapes.length) {
+        Registry.call('relayout', gd, {
+            shapes: (fullLayout.shapes || []).concat(newShapes)
+        });
+    }
 }
 
 function isHoverDataSet(hoverData) {
@@ -806,6 +885,14 @@ function clearSelect(gd) {
     var fullLayout = gd._fullLayout || {};
     var zoomlayer = fullLayout._zoomlayer;
     if(zoomlayer) {
+        // TODO: do this only for Cartesian and when is drawing
+        var outlines = zoomlayer.selectAll('.select-outline-xy')[0];
+        if(outlines.length) {
+            // add polyons to layout.shapes
+            addShape(gd, outlines);
+        }
+
+        // remove
         zoomlayer.selectAll('.select-outline').remove();
     }
 }

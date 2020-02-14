@@ -20,7 +20,7 @@ module.exports = {
     moduleType: 'trace',
     name: 'image',
     basePlotModule: require('../../plots/cartesian'),
-    categories: ['cartesian', 'svg', '2dMap', 'noSortingByValue'],
+    categories: ['cartesian', 'svg', 'zoomScale', '2dMap', 'noSortingByValue'],
     animatable: false,
     meta: {
         description: [

@@ -514,8 +514,19 @@ function coerceSelectionsCache(evt, gd, dragOptions) {
 }
 
 function clearSelectionsCache(dragOptions) {
-    var plotinfo = dragOptions.plotinfo;
+    var dragmode = dragOptions.dragmode;
+    if(drawMode(dragmode)) {
+        var gd = dragOptions.gd;
+        var outlines = gd._fullLayout._zoomlayer.selectAll('.select-outline-xy');
+        if(outlines) {
+            addShape(outlines, dragOptions);
 
+            // remove outlines
+            outlines.remove();
+        }
+    }
+
+    var plotinfo = dragOptions.plotinfo;
     plotinfo.selection = {};
     plotinfo.selection.selectionDefs = dragOptions.selectionDefs = [];
     plotinfo.selection.mergedPolygons = dragOptions.mergedPolygons = [];
@@ -615,15 +626,21 @@ function readPaths(str, size) {
     return allPaths;
 }
 
-function addShape(gd, outlines) {
+function addShape(outlines, dragOptions) {
     if(!outlines.length) return;
-    var d = outlines[outlines.length - 1] // pick last one | TODO: why we get two identical elements?
-        .getAttribute('d');
+    var gd = dragOptions.gd;
+
+    var e = outlines[0][0]; // pick first one | TODO: why we get two identical elements?
+    if(!e) return;
+    var d = e.getAttribute('d');
 
     var newShapes = [];
     var fullLayout = gd._fullLayout;
     var polygons = readPaths(d, fullLayout._size);
+
     for(var i = 0; i < polygons.length; i++) {
+        if(polygons[i].length < 2) continue;
+
         var shape = {
             xref: 'paper',
             yref: 'paper',
@@ -885,14 +902,6 @@ function clearSelect(gd) {
     var fullLayout = gd._fullLayout || {};
     var zoomlayer = fullLayout._zoomlayer;
     if(zoomlayer) {
-        // TODO: do this only for Cartesian and when is drawing
-        var outlines = zoomlayer.selectAll('.select-outline-xy')[0];
-        if(outlines.length) {
-            // add polyons to layout.shapes
-            addShape(gd, outlines);
-        }
-
-        // remove
         zoomlayer.selectAll('.select-outline').remove();
     }
 }
